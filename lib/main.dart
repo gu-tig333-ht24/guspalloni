@@ -3,6 +3,7 @@ import 'add_chores_screen.dart';
 import 'package:provider/provider.dart';
 import 'chores_api.dart';
 
+
 void main() {
   MyState state =
       MyState(); // Skapar en instans av MyState som håller ordning på todo-listan och hanterar API-kommunikationen
@@ -126,6 +127,201 @@ class MyApp extends StatelessWidget {
             },
             child: Icon(Icons.close), //Kryss för att ta bort en chore
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class Chores {
+  String id;
+  String choreName;
+  bool done;
+
+  Chores(this.id, this.choreName, this.done);
+
+  //Skapar en Chores-instans från en JSON-representation
+  factory Chores.fromJson(Map<String, dynamic> json) {
+    return Chores(json["id"], json["title"], json["done"]);
+  }
+
+  //Konverterar Chores-instansen tillbaka till JSON
+  Map<String, dynamic> toJson() {
+    return {
+      "title": choreName,
+      "done": done,
+    };
+  }
+}
+
+class MyState extends ChangeNotifier {
+  final List<Chores> _choresList = []; //Lagrar chores lokalt
+  String apiKey = "41e758f7-f727-4de8-9a6d-9200fbe45b2f";
+  String ENDPOINT = "https://todoapp-api.apps.k8s.gu.se";
+
+  bool _loading = false;
+  get loading => _loading; //Getter för att hämta loadingstatus
+
+  //Getter för att hämta listan över chores
+  List<Chores> get choresList => _choresList;
+
+  // Konstruktor för MyState, hämtar chores från API direkt när state skapas
+  MyState() {
+    apiFetchChores();
+  }
+
+//Sortera listan
+  void sortChores() {
+    _choresList.sort((a, b) {
+      if (a.done && !b.done) return 1;
+      if (!a.done && b.done) return -1;
+      return 0;
+    });
+    notifyListeners();
+  }
+
+  //Makera en chore i UI som done/ej done
+  void toggleChoreStatus(Chores chore) {
+    chore.done = !chore.done;
+    notifyListeners();
+  }
+
+  //Visar en laddningssymbol medan async körs
+  void setLoading(bool value) {
+    _loading = value;
+    notifyListeners();
+  }
+
+  //Hämtar API-listan över todos
+  Future<void> apiFetchChores() async {
+    setLoading(true);
+    final response =
+        await http.get(Uri.parse("$ENDPOINT/todos?key=$apiKey"), headers: {
+      "Content-Type": "application/json",
+    });
+
+    if (response.statusCode == 200) {
+      // Kontrollerar om API-anropet lyckades
+      final List<dynamic> choresJson = jsonDecode(response.body);
+      _choresList.clear(); //Rensar listan (lokala) innan den fylls med apidata
+      _choresList.addAll(
+        choresJson.map((json) => Chores.fromJson(json)).toList(),
+      );
+      notifyListeners();
+    } else {
+      print("Failed to fetch chores: ${response.statusCode}");
+    }
+    setLoading(false);
+  }
+
+  //Lägger till ny chore i api-listan
+  Future<void> apiAddChore(Chores chore) async {
+    setLoading(true);
+
+    final response = await http.post(
+      Uri.parse("$ENDPOINT/todos?key=$apiKey"),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode(chore.toJson()),
+    );
+    if (response.statusCode == 200) {
+      // Kontrollerar om API-anropet lyckades
+      print("Added ${chore.choreName}, successfully.");
+      final List<dynamic> chores = jsonDecode(response.body);
+      for (var item in chores) {
+        print("Todo: ${item['title']}, Done: ${item['done']}");
+      }
+    } else {
+      print("Failed to add chore: ${response.statusCode}");
+    }
+    setLoading(false);
+  }
+
+//Uppdaterar en chores status
+  Future<void> apiUpdateChore(Chores chore) async {
+    final response = await http.put(
+      Uri.parse("$ENDPOINT/todos/${chore.id}?key=$apiKey"),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode(chore.toJson()),
+    );
+    if (response.statusCode == 200) {
+      // Kontrollerar om API-anropet lyckades
+      print("Updated ${chore.choreName}");
+    } else {
+      print("Failed to update chore: ${response.statusCode}");
+    }
+  }
+
+// Tar bort en chore från api-listan
+  Future<void> apiRemoveChore(Chores chore) async {
+    setLoading(true);
+
+    final response = await http.delete(
+      Uri.parse("$ENDPOINT/todos/${chore.id}?key=$apiKey"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(chore.toJson()),
+    );
+    if (response.statusCode == 200) {
+      // Kontrollerar om API-anropet lyckades
+      print("Removed ${chore.choreName}");
+      apiFetchChores();
+    } else {
+      print("Failed to remove chore: ${response.statusCode}");
+    }
+    setLoading(false);
+  }
+}
+
+class AddChoreScreen extends StatelessWidget {
+  AddChoreScreen({super.key});
+
+  final TextEditingController textInput =
+      TextEditingController(); //Controller för att hantera input
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Add ToDo"),
+        centerTitle: true,
+        backgroundColor: Colors.grey,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          children: [
+            TextField(
+              //Textfältet där användaren skriver in ny chore
+              decoration: InputDecoration(
+                hintText: "What are you going to do?",
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.black),
+                ),
+              ),
+              controller: textInput,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton(
+                onPressed: () {
+                  final newChore =
+                      textInput.text; //Hämtar texten från textfältet
+                  Navigator.pop(context,
+                      newChore); //Stänger skärmen och skickar tillbaka newChore
+                },
+                child: Text(
+                  "+ ADD",
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
