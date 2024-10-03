@@ -39,6 +39,16 @@ class MyState extends ChangeNotifier {
     apiFetchChores();
   }
 
+//Sortera listan
+  void sortChores() {
+    _choresList.sort((a, b) {
+      if (a.done && !b.done) return 1;
+      if (!a.done && b.done) return -1;
+      return 0;
+    });
+    notifyListeners();
+  }
+
   //Makera en chore i UI som done/ej done
   void toggleChoreStatus(Chores chore) {
     chore.done = !chore.done;
@@ -94,7 +104,7 @@ class MyState extends ChangeNotifier {
     } else {
       print("Failed to add chore: ${response.statusCode}");
     }
-    setLoading(true);
+    setLoading(false);
   }
 
 //Uppdaterar en chores status

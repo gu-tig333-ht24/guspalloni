@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'addChoreScreen.dart';
+import 'add_chores_screen.dart';
 import 'package:provider/provider.dart';
-import 'api.dart';
+import 'chores_api.dart';
 
 void main() {
   MyState state =
@@ -35,13 +35,18 @@ class MyApp extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(" TIG333 To Do"),
+        title: Text("Michael Scotts ToDo"),
         centerTitle: true,
         backgroundColor: Colors.grey,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
-            child: Icon(Icons.more_vert),
+            child: GestureDetector(
+              onTap: () {
+                myState.sortChores();
+              },
+              child: Icon(Icons.sort),
+            ),
           ),
         ],
       ),

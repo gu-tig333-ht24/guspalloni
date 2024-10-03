@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 class AddChoreScreen extends StatelessWidget {
   AddChoreScreen({super.key});
 
-  TextEditingController textInput =
+  final TextEditingController textInput =
       TextEditingController(); //Controller för att hantera input
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("TIG333 TODO"),
+        title: Text("Add ToDo"),
         centerTitle: true,
         backgroundColor: Colors.grey,
       ),
