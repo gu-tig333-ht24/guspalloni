@@ -1,26 +1,21 @@
 import 'package:flutter/material.dart';
+import 'add_chores_screen.dart';
+import 'package:provider/provider.dart';
+import 'chores_api.dart';
+
 
 void main() {
-  runApp(Myhome());
+  MyState state =
+      MyState(); // Skapar en instans av MyState som håller ordning på todo-listan och hanterar API-kommunikationen
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) =>
+          state, //Ger instansen MyState till alla underliggande widgets
+      child: Myhome(),
+    ),
+  );
 }
-
-class Chores {
-  String choreName;
-  bool done;
-
-  Chores(this.choreName, this.done);
-}
-
-List<Chores> choresList = [
-  Chores("Write a book", false),
-  Chores("Do Homework", false),
-  Chores("Tidy Room", true),
-  Chores("Watch Tv", false),
-  Chores("Nap", false),
-  Chores("Shop Groceries", false),
-  Chores("Have fun", false),
-  Chores("Meditate", false)
-];
 
 class Myhome extends StatelessWidget {
   const Myhome({super.key});
@@ -31,109 +26,266 @@ class Myhome extends StatelessWidget {
   }
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  @override
   Widget build(BuildContext context) {
+    final myState = Provider.of<MyState>(
+        context); // Hämtar instansen av MyStatt och lyssnar på förändringar så att UI kan uppdateras när förändirngar sker
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(" TIG333 To Do"),
+        title: Text("Michael Scotts ToDo"),
         centerTitle: true,
         backgroundColor: Colors.grey,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
-            child: Icon(Icons.more_vert),
+            child: GestureDetector(
+              onTap: () {
+                myState.sortChores();
+              },
+              child: Icon(Icons.sort),
+            ),
           ),
         ],
       ),
-      body: ListView(
-        children: choresList
-            .map((chore) =>
-                buildChoreItem(context, chore.choreName, chore.done, chore))
-            .toList(),
-      ),
+      body: myState.loading //Kollar om data laddas från API
+          ? Center(
+              child: CircularProgressIndicator()) //Laddar det, visa en symbol
+          : ListView(
+              //Annars, visa chorelistan
+              children: myState.choresList
+                  .map((chore) => buildChoreItem(context,
+                      chore)) //Skapar en widget för varje chore i listan
+                  .toList(), //Gör listan av chores till en lista av widgets
+            ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newChore = await Navigator.push(
+          //Navigerar till skärmen där en ny chore läggs till och väntar på svar
+          final newChoreName = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => SecondScreen(),
+              builder: (context) =>
+                  AddChoreScreen(), //Sidan där användaren lägger till en ny chore
             ),
           );
-          if (newChore != null && newChore.isNotEmpty) {
-            //Kollar om man lagt till en ny chore
-            setState(() {
-              choresList.add(Chores(
-                  newChore, false)); //Lägger till ny chore till choresList
-            });
+
+          if (newChoreName != null && newChoreName.isNotEmpty) {
+            //Kollar så namnet på ny chore inte är tomt
+            Chores newChore = Chores(
+                "", newChoreName, false); //Skapar det nya chores-objektet
+            await myState.apiAddChore(newChore).then(
+                (addedChore) {}); // Lägger till det nya chore-objektet via API
           }
+          myState.apiFetchChores(); //Uppdaterar chore-listan via API
         },
         child: Icon(Icons.add),
       ),
     );
   }
 
-  Widget buildChoreItem(
-      BuildContext context, String choreName, bool done, Chores chore) {
+  //Widget för att bygga en Chore
+  Widget buildChoreItem(BuildContext context, Chores chore) {
+    final myState = Provider.of<MyState>(context); //Hämtar instansen av MyState
     return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ListTile(
-        leading: GestureDetector(
-          onTap: () {
-            setState(() {
-              chore.done = !chore.done;
-            });
-          },
-          child: done
-              ? Icon(Icons.check_box)
-              : Icon(Icons.check_box_outline_blank),
+      padding: const EdgeInsets.all(3.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: Colors.grey, width: 1),
+          borderRadius: BorderRadius.circular(8.0),
         ),
-        title: done
-            ? Text(
-                choreName,
-                style: TextStyle(
-                    decoration: TextDecoration.lineThrough, fontSize: 20),
-              )
-            : Text(
-                choreName,
-                style: TextStyle(fontSize: 20),
-              ),
-        trailing: GestureDetector(
-          onTap: () {
-            setState(() {
-              choresList.remove(chore);
-            });
-          },
-          child: (Icon(Icons.close)),
+        child: ListTile(
+          leading: GestureDetector(
+            onTap: () {
+              myState.toggleChoreStatus(
+                  chore); //Funktionen som ändrar den lokala statusen för chore tille done/ej done
+              myState.apiUpdateChore(
+                  chore); //Uppdaterar status i API så att statusen även sparas på servern
+            },
+            child: chore.done
+                ? Icon(Icons
+                    .check_box) // Om chore är markerad, visa en markerad checkbox
+                : Icon(Icons
+                    .check_box_outline_blank), // Annars, visa en omarkerad checkbox
+          ),
+          title: Text(
+            chore.choreName,
+            style: TextStyle(
+              fontSize: 20,
+              decoration: chore.done
+                  ? TextDecoration.lineThrough
+                  : TextDecoration.none, //Är chore markerad stryks texten
+            ),
+          ),
+          trailing: GestureDetector(
+            onTap: () {
+              myState.apiRemoveChore(
+                  chore); //Funktion som tar bort chore från listan på servern
+            },
+            child: Icon(Icons.close), //Kryss för att ta bort en chore
+          ),
         ),
       ),
     );
   }
 }
 
-class SecondScreen extends StatefulWidget {
-  SecondScreen({super.key});
+class Chores {
+  String id;
+  String choreName;
+  bool done;
 
-  @override
-  State<SecondScreen> createState() => _SecondScreenState();
+  Chores(this.id, this.choreName, this.done);
+
+  //Skapar en Chores-instans från en JSON-representation
+  factory Chores.fromJson(Map<String, dynamic> json) {
+    return Chores(json["id"], json["title"], json["done"]);
+  }
+
+  //Konverterar Chores-instansen tillbaka till JSON
+  Map<String, dynamic> toJson() {
+    return {
+      "title": choreName,
+      "done": done,
+    };
+  }
 }
 
-class _SecondScreenState extends State<SecondScreen> {
-  TextEditingController textInput = TextEditingController();
-  String newTask = "";
+class MyState extends ChangeNotifier {
+  final List<Chores> _choresList = []; //Lagrar chores lokalt
+  String apiKey = "41e758f7-f727-4de8-9a6d-9200fbe45b2f";
+  String ENDPOINT = "https://todoapp-api.apps.k8s.gu.se";
+
+  bool _loading = false;
+  get loading => _loading; //Getter för att hämta loadingstatus
+
+  //Getter för att hämta listan över chores
+  List<Chores> get choresList => _choresList;
+
+  // Konstruktor för MyState, hämtar chores från API direkt när state skapas
+  MyState() {
+    apiFetchChores();
+  }
+
+//Sortera listan
+  void sortChores() {
+    _choresList.sort((a, b) {
+      if (a.done && !b.done) return 1;
+      if (!a.done && b.done) return -1;
+      return 0;
+    });
+    notifyListeners();
+  }
+
+  //Makera en chore i UI som done/ej done
+  void toggleChoreStatus(Chores chore) {
+    chore.done = !chore.done;
+    notifyListeners();
+  }
+
+  //Visar en laddningssymbol medan async körs
+  void setLoading(bool value) {
+    _loading = value;
+    notifyListeners();
+  }
+
+  //Hämtar API-listan över todos
+  Future<void> apiFetchChores() async {
+    setLoading(true);
+    final response =
+        await http.get(Uri.parse("$ENDPOINT/todos?key=$apiKey"), headers: {
+      "Content-Type": "application/json",
+    });
+
+    if (response.statusCode == 200) {
+      // Kontrollerar om API-anropet lyckades
+      final List<dynamic> choresJson = jsonDecode(response.body);
+      _choresList.clear(); //Rensar listan (lokala) innan den fylls med apidata
+      _choresList.addAll(
+        choresJson.map((json) => Chores.fromJson(json)).toList(),
+      );
+      notifyListeners();
+    } else {
+      print("Failed to fetch chores: ${response.statusCode}");
+    }
+    setLoading(false);
+  }
+
+  //Lägger till ny chore i api-listan
+  Future<void> apiAddChore(Chores chore) async {
+    setLoading(true);
+
+    final response = await http.post(
+      Uri.parse("$ENDPOINT/todos?key=$apiKey"),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode(chore.toJson()),
+    );
+    if (response.statusCode == 200) {
+      // Kontrollerar om API-anropet lyckades
+      print("Added ${chore.choreName}, successfully.");
+      final List<dynamic> chores = jsonDecode(response.body);
+      for (var item in chores) {
+        print("Todo: ${item['title']}, Done: ${item['done']}");
+      }
+    } else {
+      print("Failed to add chore: ${response.statusCode}");
+    }
+    setLoading(false);
+  }
+
+//Uppdaterar en chores status
+  Future<void> apiUpdateChore(Chores chore) async {
+    final response = await http.put(
+      Uri.parse("$ENDPOINT/todos/${chore.id}?key=$apiKey"),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode(chore.toJson()),
+    );
+    if (response.statusCode == 200) {
+      // Kontrollerar om API-anropet lyckades
+      print("Updated ${chore.choreName}");
+    } else {
+      print("Failed to update chore: ${response.statusCode}");
+    }
+  }
+
+// Tar bort en chore från api-listan
+  Future<void> apiRemoveChore(Chores chore) async {
+    setLoading(true);
+
+    final response = await http.delete(
+      Uri.parse("$ENDPOINT/todos/${chore.id}?key=$apiKey"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(chore.toJson()),
+    );
+    if (response.statusCode == 200) {
+      // Kontrollerar om API-anropet lyckades
+      print("Removed ${chore.choreName}");
+      apiFetchChores();
+    } else {
+      print("Failed to remove chore: ${response.statusCode}");
+    }
+    setLoading(false);
+  }
+}
+
+class AddChoreScreen extends StatelessWidget {
+  AddChoreScreen({super.key});
+
+  final TextEditingController textInput =
+      TextEditingController(); //Controller för att hantera input
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("TIG333 TODO"),
+        title: Text("Add ToDo"),
         centerTitle: true,
         backgroundColor: Colors.grey,
       ),
@@ -142,6 +294,7 @@ class _SecondScreenState extends State<SecondScreen> {
         child: Column(
           children: [
             TextField(
+              //Textfältet där användaren skriver in ny chore
               decoration: InputDecoration(
                 hintText: "What are you going to do?",
                 border: OutlineInputBorder(
@@ -154,10 +307,10 @@ class _SecondScreenState extends State<SecondScreen> {
               padding: const EdgeInsets.all(8.0),
               child: ElevatedButton(
                 onPressed: () {
-                  setState(() {
-                    newTask = textInput.text;
-                  });
-                  Navigator.pop(context, newTask);
+                  final newChore =
+                      textInput.text; //Hämtar texten från textfältet
+                  Navigator.pop(context,
+                      newChore); //Stänger skärmen och skickar tillbaka newChore
                 },
                 child: Text(
                   "+ ADD",
