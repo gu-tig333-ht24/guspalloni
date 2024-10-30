@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
             padding: const EdgeInsets.only(right: 16.0),
             child: GestureDetector(
               onTap: () {
-                myState.sortChores();
+                myState.filterChores();
               },
               child: Icon(Icons.sort),
             ),
@@ -62,23 +62,18 @@ class MyApp extends StatelessWidget {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          //Navigerar till skärmen där en ny chore läggs till och väntar på svar
           final newChoreName = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) =>
-                  AddChoreScreen(), //Sidan där användaren lägger till en ny chore
+              builder: (context) => AddChoreScreen(),
             ),
           );
 
           if (newChoreName != null && newChoreName.isNotEmpty) {
-            //Kollar så namnet på ny chore inte är tomt
-            Chores newChore = Chores(
-                "", newChoreName, false); //Skapar det nya chores-objektet
-            await myState.apiAddChore(newChore).then(
-                (addedChore) {}); // Lägger till det nya chore-objektet via API
+            Chores newChore = Chores("", newChoreName, false);
+            await myState.apiAddChore(newChore);
+            await myState.apiFetchChores();
           }
-          myState.apiFetchChores(); //Uppdaterar chore-listan via API
         },
         child: Icon(Icons.add),
       ),
@@ -98,11 +93,11 @@ class MyApp extends StatelessWidget {
         ),
         child: ListTile(
           leading: GestureDetector(
-            onTap: () {
-              myState.toggleChoreStatus(
-                  chore); //Funktionen som ändrar den lokala statusen för chore tille done/ej done
-              myState.apiUpdateChore(
-                  chore); //Uppdaterar status i API så att statusen även sparas på servern
+            onTap: () async {
+              myState.toggleChoreStatus(chore);
+
+              await myState.apiUpdateChore(chore);
+              await myState.apiFetchChores();
             },
             child: chore.done
                 ? Icon(Icons

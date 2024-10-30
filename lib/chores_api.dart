@@ -25,6 +25,9 @@ class Chores {
 
 class MyState extends ChangeNotifier {
   final List<Chores> _choresList = []; //Lagrar chores lokalt
+  List<Chores> _filteredChoresList = []; // Lagrar filtrerade chores
+  bool _isFiltered = false;
+
   String apiKey = "41e758f7-f727-4de8-9a6d-9200fbe45b2f";
   String ENDPOINT = "https://todoapp-api.apps.k8s.gu.se";
 
@@ -34,18 +37,25 @@ class MyState extends ChangeNotifier {
   //Getter för att hämta listan över chores
   List<Chores> get choresList => _choresList;
 
+  // Getter för att hämta den filtrerade listan
+  List<Chores> get filteredChoresList => _filteredChoresList.isNotEmpty
+      ? _filteredChoresList
+      : _choresList; // Visa den filtrerade listan om den inte är tom, annars visa alla chores
+
   // Konstruktor för MyState, hämtar chores från API direkt när state skapas
   MyState() {
     apiFetchChores();
   }
 
 //Sortera listan
-  void sortChores() {
-    _choresList.sort((a, b) {
-      if (a.done && !b.done) return 1;
-      if (!a.done && b.done) return -1;
-      return 0;
-    });
+
+  void filterChores() {
+    if (_isFiltered) {
+      _filteredChoresList.clear();
+    } else {
+      _filteredChoresList = _choresList.where((chore) => !chore.done).toList();
+    }
+    _isFiltered = !_isFiltered;
     notifyListeners();
   }
 
