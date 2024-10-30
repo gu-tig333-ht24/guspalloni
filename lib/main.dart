@@ -3,7 +3,6 @@ import 'add_chores_screen.dart';
 import 'package:provider/provider.dart';
 import 'chores_api.dart';
 
-
 void main() {
   MyState state =
       MyState(); // Skapar en instans av MyState som håller ordning på todo-listan och hanterar API-kommunikationen
@@ -44,7 +43,7 @@ class MyApp extends StatelessWidget {
             padding: const EdgeInsets.only(right: 16.0),
             child: GestureDetector(
               onTap: () {
-                myState.sortChores();
+                myState.filterChores();
               },
               child: Icon(Icons.sort),
             ),
@@ -63,23 +62,18 @@ class MyApp extends StatelessWidget {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          //Navigerar till skärmen där en ny chore läggs till och väntar på svar
           final newChoreName = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) =>
-                  AddChoreScreen(), //Sidan där användaren lägger till en ny chore
+              builder: (context) => AddChoreScreen(),
             ),
           );
 
           if (newChoreName != null && newChoreName.isNotEmpty) {
-            //Kollar så namnet på ny chore inte är tomt
-            Chores newChore = Chores(
-                "", newChoreName, false); //Skapar det nya chores-objektet
-            await myState.apiAddChore(newChore).then(
-                (addedChore) {}); // Lägger till det nya chore-objektet via API
+            Chores newChore = Chores("", newChoreName, false);
+            await myState.apiAddChore(newChore);
+            await myState.apiFetchChores();
           }
-          myState.apiFetchChores(); //Uppdaterar chore-listan via API
         },
         child: Icon(Icons.add),
       ),
@@ -99,11 +93,11 @@ class MyApp extends StatelessWidget {
         ),
         child: ListTile(
           leading: GestureDetector(
-            onTap: () {
-              myState.toggleChoreStatus(
-                  chore); //Funktionen som ändrar den lokala statusen för chore tille done/ej done
-              myState.apiUpdateChore(
-                  chore); //Uppdaterar status i API så att statusen även sparas på servern
+            onTap: () async {
+              myState.toggleChoreStatus(chore);
+
+              await myState.apiUpdateChore(chore);
+              await myState.apiFetchChores();
             },
             child: chore.done
                 ? Icon(Icons
@@ -132,6 +126,9 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
+import 'dart:convert';
 
 class Chores {
   String id;
@@ -156,6 +153,9 @@ class Chores {
 
 class MyState extends ChangeNotifier {
   final List<Chores> _choresList = []; //Lagrar chores lokalt
+  List<Chores> _filteredChoresList = []; // Lagrar filtrerade chores
+  bool _isFiltered = false;
+
   String apiKey = "41e758f7-f727-4de8-9a6d-9200fbe45b2f";
   String ENDPOINT = "https://todoapp-api.apps.k8s.gu.se";
 
@@ -165,18 +165,25 @@ class MyState extends ChangeNotifier {
   //Getter för att hämta listan över chores
   List<Chores> get choresList => _choresList;
 
+  // Getter för att hämta den filtrerade listan
+  List<Chores> get filteredChoresList => _filteredChoresList.isNotEmpty
+      ? _filteredChoresList
+      : _choresList; // Visa den filtrerade listan om den inte är tom, annars visa alla chores
+
   // Konstruktor för MyState, hämtar chores från API direkt när state skapas
   MyState() {
     apiFetchChores();
   }
 
 //Sortera listan
-  void sortChores() {
-    _choresList.sort((a, b) {
-      if (a.done && !b.done) return 1;
-      if (!a.done && b.done) return -1;
-      return 0;
-    });
+
+  void filterChores() {
+    if (_isFiltered) {
+      _filteredChoresList.clear();
+    } else {
+      _filteredChoresList = _choresList.where((chore) => !chore.done).toList();
+    }
+    _isFiltered = !_isFiltered;
     notifyListeners();
   }
 
