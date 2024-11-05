@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'add_chores_screen.dart';
 import 'package:provider/provider.dart';
 import 'chores_api.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 
 void main() {
   MyState state =
@@ -35,7 +38,9 @@ class MyApp extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Michael Scotts ToDo"),
+        title: Consumer<MyState>(
+          builder: (context, state, child) => Text(state.filterModeLabel),
+        ),
         centerTitle: true,
         backgroundColor: Colors.grey,
         actions: [
@@ -43,7 +48,7 @@ class MyApp extends StatelessWidget {
             padding: const EdgeInsets.only(right: 16.0),
             child: GestureDetector(
               onTap: () {
-                myState.filterChores();
+                myState.changeFilterMode();
               },
               child: Icon(Icons.sort),
             ),
@@ -55,7 +60,7 @@ class MyApp extends StatelessWidget {
               child: CircularProgressIndicator()) //Laddar det, visa en symbol
           : ListView(
               //Annars, visa chorelistan
-              children: myState.choresList
+              children: myState.activeChoresList
                   .map((chore) => buildChoreItem(context,
                       chore)) //Skapar en widget för varje chore i listan
                   .toList(), //Gör listan av chores till en lista av widgets
@@ -126,9 +131,6 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-import 'package:http/http.dart' as http;
-import 'package:flutter/material.dart';
-import 'dart:convert';
 
 class Chores {
   String id;
@@ -153,8 +155,17 @@ class Chores {
 
 class MyState extends ChangeNotifier {
   final List<Chores> _choresList = []; //Lagrar chores lokalt
-  List<Chores> _filteredChoresList = []; // Lagrar filtrerade chores
-  bool _isFiltered = false;
+  int _filterMode = 0;
+
+  List<Chores> get activeChoresList {
+    if (_filterMode == 1) {
+      return _choresList.where((chore) => !chore.done).toList();
+    } else if (_filterMode == 2) {
+      return _choresList.where((chore) => chore.done).toList();
+    } else {
+      return _choresList;
+    }
+  }
 
   String apiKey = "41e758f7-f727-4de8-9a6d-9200fbe45b2f";
   String ENDPOINT = "https://todoapp-api.apps.k8s.gu.se";
@@ -165,26 +176,25 @@ class MyState extends ChangeNotifier {
   //Getter för att hämta listan över chores
   List<Chores> get choresList => _choresList;
 
-  // Getter för att hämta den filtrerade listan
-  List<Chores> get filteredChoresList => _filteredChoresList.isNotEmpty
-      ? _filteredChoresList
-      : _choresList; // Visa den filtrerade listan om den inte är tom, annars visa alla chores
-
   // Konstruktor för MyState, hämtar chores från API direkt när state skapas
   MyState() {
     apiFetchChores();
   }
 
-//Sortera listan
-
-  void filterChores() {
-    if (_isFiltered) {
-      _filteredChoresList.clear();
-    } else {
-      _filteredChoresList = _choresList.where((chore) => !chore.done).toList();
-    }
-    _isFiltered = !_isFiltered;
+  void changeFilterMode() {
+    _filterMode = (_filterMode + 1) % 3; // Cycles between 0, 1, and 2
     notifyListeners();
+  }
+
+  String get filterModeLabel {
+    switch (_filterMode) {
+      case 1:
+        return "Incomplete Chores";
+      case 2:
+        return "Completed Chores";
+      default:
+        return "All Chores";
+    }
   }
 
   //Makera en chore i UI som done/ej done
@@ -334,3 +344,4 @@ class AddChoreScreen extends StatelessWidget {
     );
   }
 }
+
